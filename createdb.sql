@@ -29,6 +29,17 @@ BEGIN
 		id = NEW.parent;
 END;
 
+CREATE TRIGGER nodes_after_delete
+	AFTER DELETE ON nodes
+	WHEN OLD.size != 0
+BEGIN
+	UPDATE nodes
+	SET
+		size = size - OLD.size
+	WHERE
+		id = OLD.parent;
+END;
+
 CREATE TRIGGER nodes_after_update
 	AFTER UPDATE ON nodes
 	WHEN OLD.parent = NEW.parent
@@ -64,15 +75,3 @@ BEGIN
 	WHERE
 		id = NEW.parent;
 END;
-
-CREATE TRIGGER nodes_after_delete
-	AFTER DELETE ON nodes
-	WHEN OLD.size != 0
-BEGIN
-	UPDATE nodes
-	SET
-		size = size - OLD.size
-	WHERE
-		id = OLD.parent;
-END;
-
