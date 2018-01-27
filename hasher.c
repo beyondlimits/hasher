@@ -19,11 +19,14 @@
 #define PN_TYPE 2
 #define PN_NAME 3
 #define PN_SIZE 4
-#define PN_ERROR 5
-#define PN_MD5 6
-#define PN_SHA1 7
-#define PN_SHA256 8
-#define PN_SHA512 9
+#define PN_ATIME 5
+#define PN_MTIME 6
+#define PN_CTIME 7
+#define PN_ERROR 8
+#define PN_MD5 9
+#define PN_SHA1 10
+#define PN_SHA256 11
+#define PN_SHA512 12
 
 #define AR_DB 1
 #define AR_TRANSACTION 2
@@ -40,7 +43,7 @@ static void cleanup_db()
 	int status = sqlite3_close(db);
 
 	if (status != SQLITE_OK) {
-		warn("sqlite3_close failed with status %d.", status);
+		fprintf(stderr, "sqlite3_close failed with status %d: %s\n", status, sqlite3_errmsg(db));
 	}
 }
 
@@ -49,7 +52,7 @@ static void cleanup_stmt()
 	int status = sqlite3_finalize(stmt);
 
 	if (status != SQLITE_OK) {
-		warn("sqlite3_finalize failed with status %d.", status);
+		fprintf(stderr, "sqlite3_finalize failed with status %d: %s\n", status, sqlite3_errmsg(db));
 	}
 }
 
@@ -101,7 +104,7 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	if (sqlite3_prepare(db, "INSERT INTO nodes(parent,type,name,size,error,md5,sha1,sha256,sha512) VALUES (?,?,?,?,?,?,?,?,?)", -1, &stmt, NULL) != SQLITE_OK) {
+	if (sqlite3_prepare(db, "INSERT INTO nodes(parent,type,name,size,atime,mtime,ctime,error,md5,sha1,sha256,sha512) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", -1, &stmt, NULL) != SQLITE_OK) {
 		fprintf(stderr, "Could not prepare statement: %s\n", sqlite3_errmsg(db));
 		exit(EXIT_FAILURE);
 	}
@@ -145,6 +148,20 @@ int main(int argc, char *argv[])
 	assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA256));
 	assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA512));
 
+	struct stat sb;
+
+	if (lstat(argv[AR_PATH], &sb)) { // like stat, except does not resolve symlinks
+		warn("Could not stat main directory");
+		//sqlite3_bind_null(stmt, PN_SIZE);
+		assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_ATIME, 0LL));
+		assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_MTIME, 0LL));
+		assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_CTIME, 0LL));
+	} else {
+		assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_ATIME, sb.st_atime));
+		assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_MTIME, sb.st_mtime));
+		assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_CTIME, sb.st_ctime));
+	}
+
 	if (sqlite3_step(stmt) != SQLITE_DONE) {
 		fprintf(stderr, "Could not add root node: %s\n", sqlite3_errmsg(db));
 		closedir(current.dir);
@@ -167,6 +184,9 @@ int main(int argc, char *argv[])
 	path[current.pos] = 0;
 
 	for (;;) {
+		size_t len;
+		unsigned char md5[16], sha1[20], sha256[32], sha512[64]; // because of SQLITE_STATIC
+
 		errno = 0;
 
 		struct dirent *ent = readdir(current.dir);
@@ -176,55 +196,70 @@ int main(int argc, char *argv[])
 				case DT_DIR:
 					// create subnode and keep the parent primary key
 
-					if (strcmp(ent->d_name, ".") && strcmp(ent->d_name, "..")) {
-						printf("D %s%s\n", path, ent->d_name);
-
-						if (sqlite3_reset(stmt) != SQLITE_OK) {
-							fprintf(stderr, "Could not reset statement: %s\n", sqlite3_errmsg(db));
-							break;
-						}
-
-						size_t len = strlen(ent->d_name);
-
-						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_PARENT, current.row));
-						assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_TYPE, ent->d_type));
-						assert(SQLITE_OK == sqlite3_bind_text(stmt, PN_NAME, ent->d_name, len, SQLITE_STATIC));
-						//sqlite3_bind_null(stmt, PN_SIZE);
-						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_SIZE, 0LL));
-						assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_MD5));
-						assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA1));
-						assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA256));
-						assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA512));
-
-						memcpy(&(path[current.pos]), ent->d_name, len);
-						stack[sp] = current;
-						current.pos += len;
-						path[current.pos] = 0;
-						current.dir = opendir(path);
-
-						assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_ERROR, errno));
-
-						status = sqlite3_step(stmt);
-
-						if (status != SQLITE_DONE) {
-							fprintf(stderr, "Could not execute statement: %s\n", sqlite3_errmsg(db));
-						}
-
-						if (!current.dir) {
-							warn("Could not open directory: %s", path);
-							current = stack[sp];
-						} else if (status == SQLITE_DONE) {
-							current.row = sqlite3_last_insert_rowid(db);
-							path[current.pos] = '/';
-							++current.pos;
-							++sp;
-						} else {
-							closedir(current.dir);
-							current = stack[sp];
-						}
-
-						path[current.pos] = 0;
+					if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, "..")) {
+						break;
 					}
+
+					printf("D %s%s\n", path, ent->d_name);
+
+					if (sqlite3_reset(stmt) != SQLITE_OK) {
+						fprintf(stderr, "Could not reset statement: %s\n", sqlite3_errmsg(db));
+						break;
+					}
+
+					len = strlen(ent->d_name);
+
+					assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_PARENT, current.row));
+					assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_TYPE, ent->d_type));
+					assert(SQLITE_OK == sqlite3_bind_text(stmt, PN_NAME, ent->d_name, len, SQLITE_STATIC));
+					//sqlite3_bind_null(stmt, PN_SIZE);
+					assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_SIZE, 0LL));
+					assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_MD5));
+					assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA1));
+					assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA256));
+					assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA512));
+
+					memcpy(&(path[current.pos]), ent->d_name, len);
+					stack[sp] = current;
+					current.pos += len;
+					path[current.pos] = 0;
+
+					if (lstat(path, &sb)) { // like stat, except does not resolve symlinks
+						warn("Could not stat directory: %s", path);
+						//sqlite3_bind_null(stmt, PN_SIZE);
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_ATIME, 0LL));
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_MTIME, 0LL));
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_CTIME, 0LL));
+					} else {
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_ATIME, sb.st_atime));
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_MTIME, sb.st_mtime));
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_CTIME, sb.st_ctime));
+					}
+
+					current.dir = opendir(path);
+
+					assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_ERROR, errno));
+
+					status = sqlite3_step(stmt);
+
+					if (status != SQLITE_DONE) {
+						fprintf(stderr, "Could not execute statement: %s\n", sqlite3_errmsg(db));
+					}
+
+					if (!current.dir) {
+						warn("Could not open directory: %s", path);
+						current = stack[sp];
+					} else if (status == SQLITE_DONE) {
+						current.row = sqlite3_last_insert_rowid(db);
+						path[current.pos] = '/';
+						++current.pos;
+						++sp;
+					} else {
+						closedir(current.dir);
+						current = stack[sp];
+					}
+
+					path[current.pos] = 0;
 					break;
 
 				case DT_REG:
@@ -235,9 +270,7 @@ int main(int argc, char *argv[])
 						break;
 					}
 
-					size_t len = strlen(ent->d_name);
-
-					unsigned char md5[16], sha1[20], sha256[32], sha512[64];
+					len = strlen(ent->d_name);
 
 					assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_PARENT, current.row));
 					assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_TYPE, ent->d_type));
@@ -246,14 +279,18 @@ int main(int argc, char *argv[])
 					memcpy(&(path[current.pos]), ent->d_name, len);
 					path[current.pos + len] = 0;
 
-					struct stat sb;
-
 					if (lstat(path, &sb)) {
 						warn("Could not stat file: %s", path);
 						//sqlite3_bind_null(stmt, PN_SIZE);
 						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_SIZE, 0LL));
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_ATIME, 0LL));
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_MTIME, 0LL));
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_CTIME, 0LL));
 					} else {
 						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_SIZE, sb.st_size));
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_ATIME, sb.st_atime));
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_MTIME, sb.st_mtime));
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_CTIME, sb.st_ctime));
 					}
 
 					int fd = open(path, O_RDONLY);
