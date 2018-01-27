@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
@@ -31,22 +32,28 @@
 #define AR_PATH 5
 #define AR_COUNT 6
 
-sqlite3 *db; // database handle
+sqlite3 *db;        // database handle
 sqlite3_stmt *stmt; // INSERT statement
 
 static void cleanup_db()
 {
-	sqlite3_close(db);
+	int status = sqlite3_close(db);
+
+	if (status != SQLITE_OK) {
+		warn("sqlite3_close failed with status %d.", status);
+	}
 }
 
 static void cleanup_stmt()
 {
-	sqlite3_finalize(stmt);
+	int status = sqlite3_finalize(stmt);
+
+	if (status != SQLITE_OK) {
+		warn("sqlite3_finalize failed with status %d.", status);
+	}
 }
 
-int main(argc, argv)
-int argc;
-char **argv;
+int main(int argc, char *argv[])
 {
 	if (argc < AR_COUNT) {
 		puts(
@@ -60,7 +67,7 @@ char **argv;
 	}
 
 	int status = sqlite3_open(argv[AR_DB], &db);
-	
+
 	atexit(cleanup_db);
 
 	if (status != SQLITE_OK) {
@@ -122,21 +129,21 @@ char **argv;
 	long long int id = strtoll(argv[AR_PARENT], NULL, 10);
 
 	if (id) {
-		sqlite3_bind_int64(stmt, PN_PARENT, id);
+		assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_PARENT, id));
 	} else {
-		sqlite3_bind_null(stmt, PN_PARENT);
+		assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_PARENT));
 	}
 
-	sqlite3_bind_int(stmt, PN_TYPE, DT_DIR);
-	sqlite3_bind_text(stmt, PN_NAME, argv[AR_NAME], -1, SQLITE_STATIC);
+	assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_TYPE, DT_DIR));
+	assert(SQLITE_OK == sqlite3_bind_text(stmt, PN_NAME, argv[AR_NAME], -1, SQLITE_STATIC));
 	//sqlite3_bind_null(stmt, PN_SIZE);
 	//sqlite3_bind_null(stmt, PN_ERROR);
-	sqlite3_bind_int64(stmt, PN_SIZE, 0LL);
-	sqlite3_bind_int(stmt, PN_ERROR, 0);
-	sqlite3_bind_null(stmt, PN_MD5);
-	sqlite3_bind_null(stmt, PN_SHA1);
-	sqlite3_bind_null(stmt, PN_SHA256);
-	sqlite3_bind_null(stmt, PN_SHA512);
+	assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_SIZE, 0LL));
+	assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_ERROR, 0));
+	assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_MD5));
+	assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA1));
+	assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA256));
+	assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA512));
 
 	if (sqlite3_step(stmt) != SQLITE_DONE) {
 		fprintf(stderr, "Could not add root node: %s\n", sqlite3_errmsg(db));
@@ -146,10 +153,6 @@ char **argv;
 
 	current.row = sqlite3_last_insert_rowid(db);
 	current.pos = strlen(argv[AR_PATH]);
-
-	sqlite3_bind_int64(stmt, PN_PARENT, current.row);
-
-	//printf("Root row: %Ld\n", current.row);
 
 	int sp = 0;
 	char path[PATH_MAX];
@@ -183,15 +186,15 @@ char **argv;
 
 						size_t len = strlen(ent->d_name);
 
-						sqlite3_bind_int64(stmt, PN_PARENT, current.row);
-						sqlite3_bind_int(stmt, PN_TYPE, ent->d_type);
-						sqlite3_bind_text(stmt, PN_NAME, ent->d_name, len, SQLITE_STATIC);
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_PARENT, current.row));
+						assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_TYPE, ent->d_type));
+						assert(SQLITE_OK == sqlite3_bind_text(stmt, PN_NAME, ent->d_name, len, SQLITE_STATIC));
 						//sqlite3_bind_null(stmt, PN_SIZE);
-						sqlite3_bind_int64(stmt, PN_SIZE, 0LL);
-						sqlite3_bind_null(stmt, PN_MD5);
-						sqlite3_bind_null(stmt, PN_SHA1);
-						sqlite3_bind_null(stmt, PN_SHA256);
-						sqlite3_bind_null(stmt, PN_SHA512);
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_SIZE, 0LL));
+						assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_MD5));
+						assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA1));
+						assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA256));
+						assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA512));
 
 						memcpy(&(path[current.pos]), ent->d_name, len);
 						stack[sp] = current;
@@ -199,7 +202,7 @@ char **argv;
 						path[current.pos] = 0;
 						current.dir = opendir(path);
 
-						sqlite3_bind_int(stmt, PN_ERROR, errno);
+						assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_ERROR, errno));
 
 						status = sqlite3_step(stmt);
 
@@ -236,9 +239,9 @@ char **argv;
 
 					unsigned char md5[16], sha1[20], sha256[32], sha512[64];
 
-					sqlite3_bind_int64(stmt, PN_PARENT, current.row);
-					sqlite3_bind_int(stmt, PN_TYPE, ent->d_type);
-					sqlite3_bind_text(stmt, PN_NAME, ent->d_name, len, SQLITE_STATIC);
+					assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_PARENT, current.row));
+					assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_TYPE, ent->d_type));
+					assert(SQLITE_OK == sqlite3_bind_text(stmt, PN_NAME, ent->d_name, len, SQLITE_STATIC));
 
 					memcpy(&(path[current.pos]), ent->d_name, len);
 					path[current.pos + len] = 0;
@@ -248,9 +251,9 @@ char **argv;
 					if (lstat(path, &sb)) {
 						warn("Could not stat file: %s", path);
 						//sqlite3_bind_null(stmt, PN_SIZE);
-						sqlite3_bind_int64(stmt, PN_SIZE, 0LL);
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_SIZE, 0LL));
 					} else {
-						sqlite3_bind_int64(stmt, PN_SIZE, sb.st_size);
+						assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_SIZE, sb.st_size));
 					}
 
 					int fd = open(path, O_RDONLY);
@@ -258,10 +261,10 @@ char **argv;
 					if (fd < 0) {
 						warn("Could not open file descriptor: %s", path);
 
-						sqlite3_bind_null(stmt, PN_MD5);
-						sqlite3_bind_null(stmt, PN_SHA1);
-						sqlite3_bind_null(stmt, PN_SHA256);
-						sqlite3_bind_null(stmt, PN_SHA512);
+						assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_MD5));
+						assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA1));
+						assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA256));
+						assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA512));
 					} else {
 						MD5_CTX md5c;
 						MD5_Init(&md5c);
@@ -286,19 +289,19 @@ char **argv;
 								SHA256_Final(sha256, &sha256c);
 								SHA512_Final(sha512, &sha512c);
 
-								sqlite3_bind_blob(stmt, PN_MD5, md5, sizeof(md5), SQLITE_STATIC);
-								sqlite3_bind_blob(stmt, PN_SHA1, sha1, sizeof(sha1), SQLITE_STATIC);
-								sqlite3_bind_blob(stmt, PN_SHA256, sha256, sizeof(sha256), SQLITE_STATIC);
-								sqlite3_bind_blob(stmt, PN_SHA512, sha512, sizeof(sha512), SQLITE_STATIC);
+								assert(SQLITE_OK == sqlite3_bind_blob(stmt, PN_MD5, md5, sizeof(md5), SQLITE_STATIC));
+								assert(SQLITE_OK == sqlite3_bind_blob(stmt, PN_SHA1, sha1, sizeof(sha1), SQLITE_STATIC));
+								assert(SQLITE_OK == sqlite3_bind_blob(stmt, PN_SHA256, sha256, sizeof(sha256), SQLITE_STATIC));
+								assert(SQLITE_OK == sqlite3_bind_blob(stmt, PN_SHA512, sha512, sizeof(sha512), SQLITE_STATIC));
 
 								break;
 							} else if (n < 0) {
 								warn("An error occured while reading the file: %s", path);
 
-								sqlite3_bind_null(stmt, PN_MD5);
-								sqlite3_bind_null(stmt, PN_SHA1);
-								sqlite3_bind_null(stmt, PN_SHA256);
-								sqlite3_bind_null(stmt, PN_SHA512);
+								assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_MD5));
+								assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA1));
+								assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA256));
+								assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA512));
 
 								break;
 							}
@@ -314,7 +317,7 @@ char **argv;
 
 					path[current.pos] = 0;
 
-					sqlite3_bind_int(stmt, PN_ERROR, errno);
+					assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_ERROR, errno));
 
 					if (sqlite3_step(stmt) != SQLITE_DONE) {
 						fprintf(stderr, "Could not execute statement: %s\n", sqlite3_errmsg(db));
@@ -330,17 +333,17 @@ char **argv;
 						break;
 					}
 
-					sqlite3_bind_int64(stmt, PN_PARENT, current.row);
-					sqlite3_bind_int(stmt, PN_TYPE, ent->d_type);
-					sqlite3_bind_text(stmt, PN_NAME, ent->d_name, -1, SQLITE_STATIC);
+					assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_PARENT, current.row));
+					assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_TYPE, ent->d_type));
+					assert(SQLITE_OK == sqlite3_bind_text(stmt, PN_NAME, ent->d_name, -1, SQLITE_STATIC));
 					//sqlite3_bind_null(stmt, PN_SIZE);
 					//sqlite3_bind_null(stmt, PN_ERROR);
-					sqlite3_bind_int64(stmt, PN_SIZE, 0LL);
-					sqlite3_bind_int(stmt, PN_ERROR, 0);
-					sqlite3_bind_null(stmt, PN_MD5);
-					sqlite3_bind_null(stmt, PN_SHA1);
-					sqlite3_bind_null(stmt, PN_SHA256);
-					sqlite3_bind_null(stmt, PN_SHA512);
+					assert(SQLITE_OK == sqlite3_bind_int64(stmt, PN_SIZE, 0LL));
+					assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_ERROR, 0));
+					assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_MD5));
+					assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA1));
+					assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA256));
+					assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA512));
 
 					if (sqlite3_step(stmt) != SQLITE_DONE) {
 						fprintf(stderr, "Could not execute statement: %s\n", sqlite3_errmsg(db));
