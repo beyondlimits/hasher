@@ -21,9 +21,7 @@ CREATE TRIGGER nodes_after_insert
 	AFTER INSERT ON nodes
 	WHEN NEW.size != 0
 BEGIN
-	UPDATE
-		nodes
-	SET
+	UPDATE nodes SET
 		size = size + NEW.size
 	WHERE
 		id = NEW.parent;
@@ -33,8 +31,7 @@ CREATE TRIGGER nodes_after_delete
 	AFTER DELETE ON nodes
 	WHEN OLD.size != 0
 BEGIN
-	UPDATE nodes
-	SET
+	UPDATE nodes SET
 		size = size - OLD.size
 	WHERE
 		id = OLD.parent;
@@ -45,8 +42,7 @@ CREATE TRIGGER nodes_after_update
 	WHEN OLD.parent = NEW.parent
 		AND OLD.size != NEW.size
 BEGIN
-	UPDATE nodes
-	SET
+	UPDATE nodes SET
 		size = size - OLD.size + NEW.size
 	WHERE
 		id = NEW.parent;
@@ -57,8 +53,7 @@ CREATE TRIGGER nodes_after_update_old
 	WHEN OLD.parent != NEW.parent
 		AND OLD.size != 0
 BEGIN
-	UPDATE nodes
-	SET
+	UPDATE nodes SET
 		size = size - OLD.size
 	WHERE
 		id = OLD.parent;
@@ -69,8 +64,7 @@ CREATE TRIGGER nodes_after_update_new
 	WHEN OLD.parent != NEW.parent
 		AND NEW.size != 0
 BEGIN
-	UPDATE nodes
-	SET
+	UPDATE nodes SET
 		size = size + NEW.size
 	WHERE
 		id = NEW.parent;
