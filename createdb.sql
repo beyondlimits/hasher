@@ -17,7 +17,7 @@ CREATE TABLE nodes(
 	CHECK(name != '')
 );
 
-CREATE TRIGGER nodes_after_insert
+CREATE TRIGGER nodes_insert
 	AFTER INSERT ON nodes
 	WHEN NEW.size != 0
 BEGIN
@@ -27,7 +27,7 @@ BEGIN
 		id = NEW.parent;
 END;
 
-CREATE TRIGGER nodes_after_delete
+CREATE TRIGGER nodes_delete
 	AFTER DELETE ON nodes
 	WHEN OLD.size != 0
 BEGIN
@@ -37,7 +37,7 @@ BEGIN
 		id = OLD.parent;
 END;
 
-CREATE TRIGGER nodes_after_update
+CREATE TRIGGER nodes_update
 	AFTER UPDATE ON nodes
 	WHEN OLD.parent = NEW.parent
 		AND OLD.size != NEW.size
@@ -48,7 +48,7 @@ BEGIN
 		id = NEW.parent;
 END;
 
-CREATE TRIGGER nodes_after_update_old
+CREATE TRIGGER nodes_update_old
 	AFTER UPDATE ON nodes
 	WHEN OLD.parent != NEW.parent
 		AND OLD.size != 0
@@ -59,7 +59,7 @@ BEGIN
 		id = OLD.parent;
 END;
 
-CREATE TRIGGER nodes_after_update_new
+CREATE TRIGGER nodes_update_new
 	AFTER UPDATE ON nodes
 	WHEN OLD.parent != NEW.parent
 		AND NEW.size != 0
