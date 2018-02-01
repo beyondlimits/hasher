@@ -10,8 +10,7 @@ sqlite3 *db;        // database handle
 sqlite3_stmt *stmt; // sql statement
 int firstrow = 1;
 
-static void escape(str)
-char *str;
+static void escape(char *str)
 {
 	if (!str) {
 		return;
@@ -40,9 +39,7 @@ char *str;
 	fputs(str, stdout);
 }
 
-static void putcsv(argc, argv)
-int argc;
-char **argv;
+static void putcsv(int argc, char *argv[])
 {
 	escape(argv[0]);
 
@@ -56,11 +53,7 @@ char **argv;
 	putc('\n', stdout);
 }
 
-static int callback(unused, argc, argv, name)
-void *unused;
-int argc;
-char **argv;
-char **name;
+static int callback(void *unused, int argc, char *argv[], char *name[])
 {
 	if (!argc) {
 		fputs("argc was zero.\n", stderr);
@@ -87,9 +80,7 @@ static void cleanup_stmt()
 	sqlite3_finalize(stmt);
 }
 
-int main(argc, argv)
-int argc;
-char **argv;
+int main(int argc, char *argv[])
 {
 	if (argc < 2) {
 		exit(EXIT_SUCCESS);
