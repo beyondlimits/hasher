@@ -4,19 +4,23 @@
 #include <unistd.h>
 #include "sqlite3.h"
 
+#define AR_DATABASE 1
+#define AR_STMT 2
+#define AR_COUNT 2
+
 #define BLOCK_SIZE 256
 
-sqlite3 *db;        // database handle
-sqlite3_stmt *stmt; // sql statement
+sqlite3 *db;
+sqlite3_stmt *stmt;
 int firstrow = 1;
 
-static void escape(char *str)
+static void escape(unsigned const char *str)
 {
 	if (!str) {
 		return;
 	}
 
-	unsigned char *p = str;
+	unsigned const char *p = str;
 
 	while (*p) {
 		if (*p < 32 || *p == '"' || *p == ',') {
@@ -36,18 +40,18 @@ static void escape(char *str)
 		++p;
 	}
 
-	fputs(str, stdout);
+	fputs((const char*) str, stdout);
 }
 
 static void putcsv(int argc, char *argv[])
 {
-	escape(argv[0]);
+	escape((unsigned const char*) argv[0]);
 
 	int i;
 
 	for (i = 1; i < argc; ++i) {
 		putc(',', stdout);
-		escape(argv[i]);
+		escape((unsigned const char*) argv[i]);
 	}
 
 	putc('\n', stdout);
@@ -56,8 +60,7 @@ static void putcsv(int argc, char *argv[])
 static int callback(void *unused, int argc, char *argv[], char *name[])
 {
 	if (!argc) {
-		fputs("argc was zero.\n", stderr);
-		exit(EXIT_FAILURE);
+		errx(EXIT_FAILURE, "no arguments provided to callback");
 	}
 
 	if (firstrow) {
@@ -72,50 +75,57 @@ static int callback(void *unused, int argc, char *argv[], char *name[])
 
 static void cleanup_db()
 {
-	sqlite3_close(db);
+	int status = sqlite3_close(db);
+
+	if (status != SQLITE_OK) {
+		warnx("sqlite3_close failed with status %d: %s", status, sqlite3_errmsg(db));
+	}
 }
 
 static void cleanup_stmt()
 {
-	sqlite3_finalize(stmt);
+	int status = sqlite3_finalize(stmt);
+
+	if (status != SQLITE_OK) {
+		warnx("sqlite3_finalize failed with status %d: %s", status, sqlite3_errmsg(db));
+	}
 }
 
 int main(int argc, char *argv[])
 {
-	if (argc < 2) {
+	if (argc < AR_COUNT) {
 		exit(EXIT_SUCCESS);
 	}
 
-	int status = sqlite3_open(argv[1], &db);
+	int status = sqlite3_open(argv[AR_DATABASE], &db);
 	char *sqlerr;
 
 	atexit(cleanup_db);
 
 	if (status != SQLITE_OK) {
-		fprintf(stderr, "Could not open database: %s\n", sqlite3_errmsg(db));
-		exit(EXIT_FAILURE);
+		errx(EXIT_FAILURE, "Could not open database: %s", sqlite3_errmsg(db));
 	}
 
-	if (sqlite3_db_config(db, SQLITE_DBCONFIG_ENABLE_FKEY, 1, &status) != SQLITE_OK) {
-		fprintf(stderr, "Could not enforce foreign keys: %s\n", sqlite3_errmsg(db));
-		exit(EXIT_FAILURE);
-	}
+	{
+		char *s = getenv("SQLITE_DBCONFIG_ENABLE_FKEY");
+		int fk = !s || atoi(s);
 
-	if (!status) {
-		fputs("Could not enforce foreign keys.\n", stderr);
-		exit(EXIT_FAILURE);
+		if (sqlite3_db_config(db, SQLITE_DBCONFIG_ENABLE_FKEY, fk, &status) != SQLITE_OK) {
+			errx(EXIT_FAILURE, "Could not set SQLITE_DBCONFIG_ENABLE_FKEY to %s: %s", s, sqlite3_errmsg(db));
+		}
+
+		if (fk != status) {
+			errx(EXIT_FAILURE, "Could not set SQLITE_DBCONFIG_ENABLE_FKEY to %s: status = %d", s, status);
+		}
 	}
 
 	if (sqlite3_exec(db, "PRAGMA recursive_triggers = ON", NULL, NULL, &sqlerr) != SQLITE_OK) {
-		fprintf(stderr, "Could not enable recursive triggers: %s\n", sqlerr);
-		sqlite3_free(sqlerr);
-		exit(EXIT_FAILURE);
+		errx(EXIT_FAILURE, "Could not enable recursive triggers: %s", sqlerr);
 	}
 
-	if (argc > 2) {
-		if (sqlite3_prepare(db, argv[2], -1, &stmt, NULL) != SQLITE_OK) {
-			fprintf(stderr, "Could not prepare statement: %s\n", sqlite3_errmsg(db));
-			exit(EXIT_FAILURE);
+	if (argc > AR_COUNT) {
+		if (sqlite3_prepare(db, argv[AR_STMT], -1, &stmt, NULL) != SQLITE_OK) {
+			errx(EXIT_FAILURE, "Could not prepare statement: %s", sqlite3_errmsg(db));
 		}
 
 		atexit(cleanup_stmt);
@@ -124,11 +134,11 @@ int main(int argc, char *argv[])
 		int n = sqlite3_column_count(stmt);
 
 		if (n) {
-			escape(sqlite3_column_name(stmt, 0));
+			escape((unsigned const char*) sqlite3_column_name(stmt, 0));
 
 			for (i = 1; i < n; ++i) {
 				putc(',', stdout);
-				escape(sqlite3_column_name(stmt, i));
+				escape((unsigned const char*) sqlite3_column_name(stmt, i));
 			}
 
 			putc('\n', stdout);
@@ -158,8 +168,7 @@ int main(int argc, char *argv[])
 					exit(EXIT_SUCCESS);
 
 				default:
-					fprintf(stderr, "sqlite3_step returned %d: %s\n", status, sqlite3_errmsg(db));
-					exit(EXIT_FAILURE);
+					errx(EXIT_FAILURE, "sqlite3_step returned %d: %s", status, sqlite3_errmsg(db));
 			}
 		}
 	} else {
@@ -212,9 +221,7 @@ int main(int argc, char *argv[])
 		free(sql);
 
 		if (status != SQLITE_OK) {
-			fprintf(stderr, "sqlite3_exec returned %d: %s\n", status, sqlerr);
-			sqlite3_free(sqlerr);
-			exit(EXIT_FAILURE);
+			errx(EXIT_FAILURE, "sqlite3_exec returned %d: %s", status, sqlerr);
 		}
 	}
 
