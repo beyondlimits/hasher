@@ -28,7 +28,7 @@
 #define PN_SHA256 11
 #define PN_SHA512 12
 
-#define AR_DB 1
+#define AR_DATABASE 1
 #define AR_TRANSACTION 2
 #define AR_PARENT 3
 #define AR_NAME 4
@@ -43,7 +43,7 @@ static void cleanup_db()
 	int status = sqlite3_close(db);
 
 	if (status != SQLITE_OK) {
-		fprintf(stderr, "sqlite3_close failed with status %d: %s\n", status, sqlite3_errmsg(db));
+		warnx("sqlite3_close failed with status %d: %s", status, sqlite3_errmsg(db));
 	}
 }
 
@@ -52,13 +52,13 @@ static void cleanup_stmt()
 	int status = sqlite3_finalize(stmt);
 
 	if (status != SQLITE_OK) {
-		fprintf(stderr, "sqlite3_finalize failed with status %d: %s\n", status, sqlite3_errmsg(db));
+		warnx("sqlite3_finalize failed with status %d: %s", status, sqlite3_errmsg(db));
 	}
 }
 
 int main(int argc, char *argv[])
 {
-	if (argc < AR_COUNT) {
+	if (argc != AR_COUNT) {
 		puts(
 			"\targv[1] = database file\n"
 			"\targv[2] = whether to use transaction\n"
@@ -69,29 +69,26 @@ int main(int argc, char *argv[])
 		exit(EXIT_SUCCESS);
 	}
 
-	int status = sqlite3_open(argv[AR_DB], &db);
+	int status = sqlite3_open(argv[AR_DATABASE], &db);
 
 	atexit(cleanup_db);
 
 	if (status != SQLITE_OK) {
-		fprintf(stderr, "Could not open database: %s\n", sqlite3_errmsg(db));
-		exit(EXIT_FAILURE);
+		errx(EXIT_FAILURE, "Could not open database: %s", sqlite3_errmsg(db));
 	}
 
 	if (sqlite3_db_config(db, SQLITE_DBCONFIG_ENABLE_FKEY, 1, &status) != SQLITE_OK) {
-		fprintf(stderr, "Could not enforce foreign keys: %s\n", sqlite3_errmsg(db));
-		exit(EXIT_FAILURE);
+		errx(EXIT_FAILURE, "Could not enforce foreign keys: %s", sqlite3_errmsg(db));
 	}
 
 	if (!status) {
-		fputs("Could not enforce foreign keys.\n", stderr);
-		exit(EXIT_FAILURE);
+		errx(EXIT_FAILURE, "Could not enforce foreign keys.\n");
 	}
 
 	char *sqlerr;
 
 	if (sqlite3_exec(db, "PRAGMA recursive_triggers = ON", NULL, NULL, &sqlerr) != SQLITE_OK) {
-		fprintf(stderr, "Could not enable recursive triggers: %s\n", sqlerr);
+		warnx("Could not enable recursive triggers: %s", sqlerr);
 		sqlite3_free(sqlerr);
 		exit(EXIT_FAILURE);
 	}
@@ -99,14 +96,13 @@ int main(int argc, char *argv[])
 	int transaction = atoi(argv[AR_TRANSACTION]);
 
 	if (transaction && sqlite3_exec(db, "BEGIN", NULL, NULL, &sqlerr) != SQLITE_OK) {
-		fprintf(stderr, "Could not begin transaction: %s\n", sqlerr);
+		warnx("Could not begin transaction: %s", sqlerr);
 		sqlite3_free(sqlerr);
 		exit(EXIT_FAILURE);
 	}
 
 	if (sqlite3_prepare(db, "INSERT INTO nodes(parent,type,name,size,atime,mtime,ctime,error,md5,sha1,sha256,sha512) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", -1, &stmt, NULL) != SQLITE_OK) {
-		fprintf(stderr, "Could not prepare statement: %s\n", sqlite3_errmsg(db));
-		exit(EXIT_FAILURE);
+		errx(EXIT_FAILURE, "Could not prepare statement: %s\n", sqlite3_errmsg(db));
 	}
 
 	atexit(cleanup_stmt);
@@ -163,7 +159,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (sqlite3_step(stmt) != SQLITE_DONE) {
-		fprintf(stderr, "Could not add root node: %s\n", sqlite3_errmsg(db));
+		warnx("Could not add root node: %s", sqlite3_errmsg(db));
 		closedir(current.dir);
 		exit(EXIT_FAILURE);
 	}
@@ -203,7 +199,7 @@ int main(int argc, char *argv[])
 					printf("D %s%s\n", path, ent->d_name);
 
 					if (sqlite3_reset(stmt) != SQLITE_OK) {
-						fprintf(stderr, "Could not reset statement: %s\n", sqlite3_errmsg(db));
+						warnx("Could not reset statement: %s", sqlite3_errmsg(db));
 						break;
 					}
 
@@ -243,7 +239,7 @@ int main(int argc, char *argv[])
 					status = sqlite3_step(stmt);
 
 					if (status != SQLITE_DONE) {
-						fprintf(stderr, "Could not execute statement: %s\n", sqlite3_errmsg(db));
+						warnx("Could not execute statement: %s", sqlite3_errmsg(db));
 					}
 
 					if (!current.dir) {
@@ -266,7 +262,7 @@ int main(int argc, char *argv[])
 					printf("F %s%s\n", path, ent->d_name);
 
 					if (sqlite3_reset(stmt) != SQLITE_OK) {
-						fprintf(stderr, "Could not reset statement: %s\n", sqlite3_errmsg(db));
+						warnx("Could not reset statement: %s", sqlite3_errmsg(db));
 						break;
 					}
 
@@ -357,7 +353,7 @@ int main(int argc, char *argv[])
 					assert(SQLITE_OK == sqlite3_bind_int(stmt, PN_ERROR, errno));
 
 					if (sqlite3_step(stmt) != SQLITE_DONE) {
-						fprintf(stderr, "Could not execute statement: %s\n", sqlite3_errmsg(db));
+						warnx("Could not execute statement: %s", sqlite3_errmsg(db));
 					}
 
 					break;
@@ -366,7 +362,7 @@ int main(int argc, char *argv[])
 					printf("%d %s%s\n", ent->d_type, path, ent->d_name);
 
 					if (sqlite3_reset(stmt) != SQLITE_OK) {
-						fprintf(stderr, "Could not reset statement: %s\n", sqlite3_errmsg(db));
+						warnx("Could not reset statement: %s", sqlite3_errmsg(db));
 						break;
 					}
 
@@ -383,7 +379,7 @@ int main(int argc, char *argv[])
 					assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA512));
 
 					if (sqlite3_step(stmt) != SQLITE_DONE) {
-						fprintf(stderr, "Could not execute statement: %s\n", sqlite3_errmsg(db));
+						warnx("Could not execute statement: %s", sqlite3_errmsg(db));
 					}
 			}
 		} else {
@@ -404,11 +400,10 @@ int main(int argc, char *argv[])
 	}
 
 	if (transaction && sqlite3_exec(db, "COMMIT", NULL, NULL, &sqlerr) != SQLITE_OK) {
-		fprintf(stderr, "Could not commit transaction: %s\n", sqlerr);
+		warnx("Could not commit transaction: %s", sqlerr);
 		sqlite3_free(sqlerr);
 		exit(EXIT_FAILURE);
 	}
 
 	exit(EXIT_SUCCESS);
 }
-
