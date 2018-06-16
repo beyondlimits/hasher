@@ -13,27 +13,27 @@
 #include "sqlite3.h"
 
 #define MAX_STACK_SIZE 128
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE   4096
 
-#define PN_PARENT 1
-#define PN_TYPE 2
-#define PN_NAME 3
-#define PN_SIZE 4
-#define PN_ATIME 5
-#define PN_MTIME 6
-#define PN_CTIME 7
-#define PN_ERROR 8
-#define PN_MD5 9
-#define PN_SHA1 10
-#define PN_SHA256 11
-#define PN_SHA512 12
+#define PN_PARENT        1
+#define PN_TYPE          2
+#define PN_NAME          3
+#define PN_SIZE          4
+#define PN_ATIME         5
+#define PN_MTIME         6
+#define PN_CTIME         7
+#define PN_ERROR         8
+#define PN_MD5           9
+#define PN_SHA1         10
+#define PN_SHA256       11
+#define PN_SHA512       12
 
-#define AR_DATABASE 1
-#define AR_TRANSACTION 2
-#define AR_PARENT 3
-#define AR_NAME 4
-#define AR_PATH 5
-#define AR_COUNT 6
+#define AR_DATABASE      1
+#define AR_TRANSACTION   2
+#define AR_PARENT        3
+#define AR_NAME          4
+#define AR_PATH          5
+#define AR_COUNT         6
 
 sqlite3 *db;        // database handle
 sqlite3_stmt *stmt; // INSERT statement
@@ -60,9 +60,9 @@ int main(int argc, char *argv[])
 {
 	if (argc != AR_COUNT) {
 		puts(
-			"\targv[1] = database file\n"
+			"\targv[1] = database file name\n"
 			"\targv[2] = whether to use transaction\n"
-			"\targv[3] = parent node id or 0 for no parent\n"
+			"\targv[3] = parent node id or zero for no parent\n"
 			"\targv[4] = node name\n"
 			"\targv[5] = directory path"
 		);
@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (!status) {
-		errx(EXIT_FAILURE, "Could not enforce foreign keys.\n");
+		errx(EXIT_FAILURE, "Could not enforce foreign keys");
 	}
 
 	char *sqlerr;

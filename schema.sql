@@ -13,11 +13,11 @@ CREATE TABLE nodes(
 	sha256 BLOB,
 	sha512 BLOB,
 	PRIMARY KEY(id),
-	FOREIGN KEY(parent),
+	FOREIGN KEY(parent)
 		REFERENCES nodes(id),
 	UNIQUE(parent, name),
-	CHECK(size >= 0),
-	CHECK(name <> '')
+	CHECK(name <> ''),
+	CHECK(size >= 0)
 );
 
 CREATE TRIGGER nodes_insert
