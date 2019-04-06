@@ -42,7 +42,7 @@ END;
 
 CREATE TRIGGER nodes_update
 	AFTER UPDATE ON nodes
-	WHEN OLD.parent = NEW.parent
+	WHEN OLD.parent IS NEW.parent
 		AND OLD.size <> NEW.size
 BEGIN
 	UPDATE nodes SET
@@ -53,7 +53,7 @@ END;
 
 CREATE TRIGGER nodes_update_old
 	AFTER UPDATE ON nodes
-	WHEN OLD.parent <> NEW.parent
+	WHEN OLD.parent IS NOT NEW.parent
 		AND OLD.size <> 0
 BEGIN
 	UPDATE nodes SET
@@ -64,7 +64,7 @@ END;
 
 CREATE TRIGGER nodes_update_new
 	AFTER UPDATE ON nodes
-	WHEN OLD.parent <> NEW.parent
+	WHEN OLD.parent IS NOT NEW.parent
 		AND NEW.size <> 0
 BEGIN
 	UPDATE nodes SET
