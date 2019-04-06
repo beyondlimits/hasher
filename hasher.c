@@ -300,16 +300,16 @@ int main(int argc, char *argv[])
 						assert(SQLITE_OK == sqlite3_bind_null(stmt, PN_SHA512));
 					} else {
 						MD5_CTX md5c;
-						MD5_Init(&md5c);
+						assert(MD5_Init(&md5c) == 1);
 
 						SHA_CTX sha1c;
-						SHA1_Init(&sha1c);
+						assert(SHA1_Init(&sha1c) == 1);
 
 						SHA256_CTX sha256c;
-						SHA256_Init(&sha256c);
+						assert(SHA256_Init(&sha256c) == 1);
 
 						SHA512_CTX sha512c;
-						SHA512_Init(&sha512c);
+						assert(SHA512_Init(&sha512c) == 1);
 
 						char buffer[BUFFER_SIZE];
 
@@ -339,10 +339,10 @@ int main(int argc, char *argv[])
 								break;
 							}
 
-							MD5_Update(&md5c, buffer, n);
-							SHA1_Update(&sha1c, buffer, n);
-							SHA256_Update(&sha256c, buffer, n);
-							SHA512_Update(&sha512c, buffer, n);
+							assert(MD5_Update(&md5c, buffer, n) == 1);
+							assert(SHA1_Update(&sha1c, buffer, n) == 1);
+							assert(SHA256_Update(&sha256c, buffer, n) == 1);
+							assert(SHA512_Update(&sha512c, buffer, n) == 1);
 						}
 
 						close(fd);
