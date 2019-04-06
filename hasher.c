@@ -172,7 +172,7 @@ int main(int argc, char *argv[])
 
 	memcpy(path, argv[AR_PATH], current.pos);
 
-	if (argv[AR_PATH][current.pos - 1] != '/') {
+	if (path[current.pos - 1] != '/') {
 		path[current.pos] = '/';
 		++current.pos;
 	}
